@@ -5,21 +5,36 @@
 import sys
 import asyncio
 import argparse
+import logging
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agents.structure_scanner_agent import StructureScannerAgent
-from agents.semantic_analyzer_agent import SemanticAnalyzerAgent
-from agents.doc_generator_agent import DocGeneratorAgent
+from wiki_agents.structure_scanner_agent import StructureScannerAgent
+from wiki_agents.semantic_analyzer_agent import SemanticAnalyzerAgent
+from wiki_agents.doc_generator_agent import DocGeneratorAgent
 from utils.debug_helper import DebugHelper
 
 
 async def main():
     """主程序入口"""
+    # 配置日志
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
     parser = argparse.ArgumentParser(description="代码仓库深度分析工具")
     parser.add_argument("repo_path", help="代码仓库路径")
+    parser.add_argument("--debug", action="store_true", help="启用调试日志")
     args = parser.parse_args()
+
+    # 如果启用debug，设置为DEBUG级别
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
     print("\n" + "="*60)
     print("🚀 代码仓库深度分析")

@@ -13,11 +13,12 @@ from typing import Optional, Dict, Any, List
 import logging
 
 try:
-    from tree_sitter_languages import get_language, get_parser
+    from tree_sitter_language_pack import get_language, get_parser
+    from tree_sitter import Query, QueryCursor
     HAS_TREE_SITTER = True
 except ImportError:
     HAS_TREE_SITTER = False
-    logging.warning("tree-sitter-languages not installed, parsing disabled")
+    logging.warning("tree-sitter-language-pack not installed, parsing disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,8 @@ class PolyglotParser:
         """初始化解析器"""
         if not HAS_TREE_SITTER:
             raise RuntimeError(
-                "tree-sitter-languages not installed. "
-                "Install with: pip install tree-sitter-languages"
+                "tree-sitter-language-pack not installed. "
+                "Install with: pip install tree-sitter-language-pack"
             )
 
         # Parser 缓存 {language: parser}
@@ -205,13 +206,21 @@ class PolyglotParser:
         try:
             lang = self.get_language(language)
 
-            # 创建查询
-            query = lang.query(query_string)
+            # 使用新的 Query + QueryCursor API (tree-sitter 0.25.0+)
+            # 1. 使用 Query() 构造函数创建查询对象（lang.query() 已废弃）
+            # 2. 使用 QueryCursor.captures() 执行查询（Query.captures() 已移除）
+            # 新 API 返回格式: {capture_name: [nodes]}
+            query = Query(lang, query_string)
+            cursor = QueryCursor(query)
+            captures_dict = cursor.captures(tree.root_node)
 
-            # 执行查询
-            captures = query.captures(tree.root_node)
+            # 转换为旧格式 [(node, capture_name), ...] 以保持向后兼容
+            result = []
+            for capture_name, nodes in captures_dict.items():
+                for node in nodes:
+                    result.append((node, capture_name))
 
-            return captures
+            return result
 
         except Exception as e:
             logger.error(f"Query error: {e}")

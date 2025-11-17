@@ -557,7 +557,7 @@ class DebugHelper:
 
         self._log(f"  💾 批次{batch_idx}结果已保存")
 
-    def load_batch_result(self, batch_dir: Path, module_name: str, batch_idx: int) -> dict:
+    def load_batch_result(self, batch_dir: Path, module_name: str, batch_idx: int) -> Optional[dict]:
         """
         加载已保存的批次结果
 

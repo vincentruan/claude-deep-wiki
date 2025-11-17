@@ -17,17 +17,16 @@ import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
-
 # 添加 src 到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp_servers.code_analysis_server import create_code_analysis_mcp_server
-from config import ANTHROPIC_AUTH_TOKEN, MAX_TURNS
+from config import AGENT_SDK
 from utils.batch_analyzer import FileAnalysisBatchManager
 from utils.semantic_prompt_builder import SemanticPromptBuilder
 from utils.json_extractor import JSONExtractor
-from utils.claude_query_helper import ClaudeQueryHelper
+from utils.unified_query_helper import UnifiedQueryHelper
+from utils.agent_factory import AgentFactory
 
 logger = None  # 简化日志
 
@@ -49,19 +48,14 @@ class SemanticAnalyzerAgent:
         # 创建 MCP Server
         self._mcp_server = create_code_analysis_mcp_server()
 
-        # 创建 Claude Client
-        self.client = ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                env={"ANTHROPIC_AUTH_TOKEN": ANTHROPIC_AUTH_TOKEN},
-                mcp_servers={"code-analysis": self._mcp_server},
-                allowed_tools=["code-analysis/*"],
-                system_prompt="你是资深的代码架构师，擅长从技术代码中提炼业务逻辑和产品功能。",
-                max_turns=MAX_TURNS,
-                permission_mode="bypassPermissions"
-            )
+        # 使用工厂创建 Agent（根据配置自动选择 Claude 或 OpenAI）
+        self.client, self.openai_client, self._threads = AgentFactory.create_client(
+            name="SemanticAnalyzer",
+            instructions="你是资深的代码架构师，擅长从技术代码中提炼业务逻辑和产品功能。",
+            mcp_server=self._mcp_server
         )
 
-        self._connected = False  # 连接状态
+        self._connected = False  # 连接状态（仅 Claude 需要）
 
     async def analyze_semantics(
         self, structure_data: Dict[str, Any], repo_path: str
@@ -85,9 +79,9 @@ class SemanticAnalyzerAgent:
                 "analysis_metadata": {...}
             }
         """
-        # 确保已连接
+        # 确保已连接（仅 Claude 需要）
         if not self._connected:
-            await self.client.connect()
+            await AgentFactory.connect_client(self.client)
             self._connected = True
 
         # 尝试加载完整缓存
@@ -229,17 +223,17 @@ class SemanticAnalyzerAgent:
             key_files_info=key_files_info
         )
 
-        # 每个模块使用独立session，但同一模块的overview和details共享session
+        # 每个模块使用独立session/thread，但同一模块的overview和details共享session/thread
         # 这样后续的详细分析可以基于overview建立的理解
-        session_id = f"semantic_module_{module_name}"
+        session_key = f"semantic_module_{module_name}"
 
-        # 使用带重试的查询，验证返回的JSON包含module_name字段
-        response_text, overview = await ClaudeQueryHelper.query_with_json_retry(
+        # 使用统一查询助手
+        response_text, overview = await UnifiedQueryHelper.query_with_json_retry(
             client=self.client,
             prompt=prompt,
-            session_id=session_id,
+            session_id=self._get_session_id(session_key),
             max_attempts=3,
-            validator=lambda r: r and r.get('module_name')
+            validator=lambda r: bool(r and r.get('module_name'))
         )
 
         self.last_response = response_text
@@ -301,16 +295,16 @@ class SemanticAnalyzerAgent:
                     module, overview, batch, repo_path, idx, len(batches)
                 )
 
-                # 使用与overview相同的session_id，让AI利用已建立的模块理解
-                session_id = f"semantic_module_{module_name}"
+                # 使用与overview相同的session/thread，让AI利用已建立的模块理解
+                session_key = f"semantic_module_{module_name}"
 
-                # 使用带重试的查询，验证返回的JSON包含files_analysis字段
-                response_text, batch_result = await ClaudeQueryHelper.query_with_json_retry(
+                # 使用统一查询助手
+                response_text, batch_result = await UnifiedQueryHelper.query_with_json_retry(
                     client=self.client,
                     prompt=prompt,
-                    session_id=session_id,
+                    session_id=self._get_session_id(session_key),
                     max_attempts=3,
-                    validator=lambda r: r and r.get('files_analysis')
+                    validator=lambda r: bool(r and r.get('files_analysis'))
                 )
 
                 self.last_response = response_text
@@ -511,10 +505,23 @@ class SemanticAnalyzerAgent:
 
         return relationships
 
+    def _get_session_id(self, session_key: str) -> Optional[str]:
+        """
+        获取会话ID（Claude 或 OpenAI）
+
+        Args:
+            session_key: 会话标识符
+
+        Returns:
+            Claude: 返回 session_key
+            OpenAI: 返回 threads.get(session_key) 或 None
+        """
+        return AgentFactory.get_session_id(session_key, self._threads)
+
     async def disconnect(self):
         """断开连接并清理资源"""
         if self._connected:
-            await self.client.disconnect()
+            await AgentFactory.disconnect_client(self.client, self.openai_client)
             self._connected = False
 
 

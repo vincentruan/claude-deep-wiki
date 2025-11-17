@@ -1,6 +1,6 @@
 # Claude DeepWiki
 
-> 基于 Claude Agent SDK 的智能代码仓库分析工具，自动生成业务导向的项目知识库
+> 智能代码仓库分析工具，支持 Claude Agent SDK 和 OpenAI Agents SDK，自动生成业务导向的项目知识库
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -16,16 +16,23 @@
 - 🔒 **Devin.ai 的 DeepWiki** 效果出色，但闭源且仅支持 GitHub 托管的公开仓库
 - 📉 **开源版 open-deepwiki** 分析效果有限，难以满足生产需求
 
-因此，我们基于 **Claude Agent SDK** 打造了这个工具，旨在：
+因此，我们打造了这个工具，旨在：
+
 - ✅ 本地运行，支持任何代码仓库（公开/私有）
 - ✅ 深度理解业务逻辑，生成面向产品的 PRD 文档
 - ✅ 多语言支持（165+ 编程语言）
+- ✅ 双 SDK 支持：可选 Claude Agent SDK 或 OpenAI Agents SDK
 
 ## 🎯 设计理念
 
-### 1. Claude Agent SDK 驱动
+### 1. 双 Agent SDK 支持
 
-利用 Claude Sonnet 4.5 强大的代码理解能力，通过 Agent SDK 实现自主工具调用和多轮推理。
+支持两种强大的 Agent 框架：
+
+- **Claude Agent SDK**：Anthropic 官方的 Agent 框架，强大的推理能力
+- **OpenAI Agents SDK**：OpenAI 的 Agents 框架，支持 GPT-4 系列模型
+
+通过配置文件即可切换，无需修改代码。
 
 ### 2. 三阶段多 Agent 协作
 
@@ -34,16 +41,19 @@
 ```
 
 **阶段 1: Structure Scanner Agent**
+
 - 扫描项目结构，识别模块层次
 - 分析文件依赖关系
 - 智能判断模块分层（core/business/utils）
 
 **阶段 2: Semantic Analyzer Agent**
+
 - 概览分析：理解模块的业务价值
 - 细节分析：深入挖掘函数/类的业务逻辑（智能分批处理）
 - 提取跨文件的业务关系
 
 **阶段 3: Doc Generator Agent**
+
 - 产品功能域智能分组
 - 生成业务导向的 PRD 文档
 - 质量验证（防止技术术语泄漏）
@@ -92,7 +102,9 @@ def validate_analysis_result(analysis: dict) -> dict:
 ### 环境要求
 
 - Python 3.11+
-- Anthropic API Key（Claude Sonnet 4.5）
+- 二选一：
+  - Claude API Key（使用 Claude Agent SDK）
+  - OpenAI API Key（使用 OpenAI Agents SDK，支持 OpenAI 兼容的第三方 API）
 
 ### 安装步骤
 
@@ -102,21 +114,85 @@ git clone https://github.com/your-username/claude-deep-wiki.git
 cd claude-deep-wiki
 
 # 2. 创建虚拟环境
-python3.11 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python3.11 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # 3. 安装依赖
 pip install -r requirements.txt
 
-# 4. 配置 API Key
-# 方式1: 环境变量
-export ANTHROPIC_API_KEY="your-api-key"
-
-# 方式2: 修改 src/config.py
-# ANTHROPIC_AUTH_TOKEN = "your-api-key"
+# 4. 配置 Agent SDK 和 API Key（推荐使用 .env 文件）
+cp .env.example .env
+# 编辑 .env 文件，填入你的配置
 ```
 
-> **注意**：`claude-agent-sdk` 目前未发布到 PyPI，如遇到安装问题，请参考 [Claude Agent SDK 文档](https://docs.anthropic.com/en/docs/claude-agent-sdk)
+### 配置说明
+
+支持两种方式配置：环境变量（推荐）或修改配置文件。
+
+#### 使用 OpenAI Agents SDK（默认）
+
+```bash
+# .env 文件或环境变量
+export AGENT_SDK="openai"                 # 选择使用 OpenAI SDK（默认值）
+export OPENAI_API_KEY="your-api-key"
+
+# （可选）自定义 API 地址（支持 Azure OpenAI、DeepSeek、Ollama 等 OpenAI 兼容 API）
+export OPENAI_BASE_URL="https://your-custom-endpoint.com/v1"
+
+# （可选）自定义模型名称和参数
+export OPENAI_MODEL="gpt-4o"              # 默认: gpt-4o
+export MODEL_TEMPERATURE="0.7"            # 默认: 0.7，范围 0.0-2.0
+export MODEL_TOP_P="1.0"                  # 默认: 1.0，范围 0.0-1.0
+export MODEL_MAX_TOKENS="4096"            # 默认: 4096
+
+# （可选）自定义输出目录
+export OUTPUT_DIR="output"                # 相对路径（相对于项目根目录）
+# 或
+export OUTPUT_DIR="/absolute/path/to/output"  # 绝对路径
+```
+
+**使用第三方 API 示例**：
+
+```bash
+# DeepSeek API
+export OPENAI_API_KEY="sk-xxx"
+export OPENAI_BASE_URL="https://api.deepseek.com/v1"
+export OPENAI_MODEL="deepseek-chat"
+
+# Ollama 本地模型
+export OPENAI_API_KEY="dummy-key"
+export OPENAI_BASE_URL="http://localhost:11434/v1"
+export OPENAI_MODEL="qwen2.5:14b"
+```
+
+#### 使用 Claude Agent SDK
+
+```bash
+# .env 文件或环境变量
+export AGENT_SDK="claude"                 # 选择使用 Claude SDK
+export ANTHROPIC_AUTH_TOKEN="your-auth-token"
+
+# （可选）自定义模型名称和参数
+export CLAUDE_MODEL="claude-sonnet-4-20250514"  # 可选，不指定则使用默认
+export MODEL_TEMPERATURE="0.7"            # 默认: 0.7
+export MODEL_TOP_P="1.0"                  # 默认: 1.0
+export MODEL_MAX_TOKENS="4096"            # 默认: 4096
+```
+
+#### 配置参数说明
+
+| 参数                     | 说明                                         | 默认值           |
+| ------------------------ | -------------------------------------------- | ---------------- |
+| `AGENT_SDK`            | 选择 Agent SDK：`"openai"` 或 `"claude"` | `"openai"`     |
+| `OPENAI_API_KEY`       | OpenAI API 密钥（使用 OpenAI SDK 时必需）    | -                |
+| `OPENAI_BASE_URL`      | 自定义 OpenAI API 地址（可选）               | 标准 OpenAI 地址 |
+| `OPENAI_MODEL`         | OpenAI 模型名称                              | `"gpt-4o"`     |
+| `ANTHROPIC_AUTH_TOKEN` | Claude API 令牌（使用 Claude SDK 时必需）    | -                |
+| `CLAUDE_MODEL`         | Claude 模型名称（可选）                      | SDK 默认模型     |
+| `MODEL_TEMPERATURE`    | 模型温度（0.0-2.0）                          | `0.7`          |
+| `MODEL_TOP_P`          | Top-p 采样参数（0.0-1.0）                    | `1.0`          |
+| `MODEL_MAX_TOKENS`     | 最大输出 token 数                            | `4096`         |
+| `OUTPUT_DIR`           | 输出目录路径（相对或绝对路径）               | `"output"`     |
 
 ### 运行分析
 
@@ -143,6 +219,7 @@ output/
 ```
 
 **PRD 文档结构**：
+
 ```markdown
 # [功能域名称]
 
@@ -166,19 +243,19 @@ output/
 
 ## 🛠️ 技术栈
 
-| 技术 | 用途 |
-|------|------|
-| **Claude Agent SDK** | AI 驱动的多 Agent 协作框架 |
-| **Tree-sitter** | 165+ 编程语言的统一 AST 解析 |
-| **MCP** | 工具调用的标准化协议 |
-| **Python 3.11+** | 主要开发语言 |
+| 技术                                           | 用途                               |
+| ---------------------------------------------- | ---------------------------------- |
+| **Claude Agent SDK / OpenAI Agents SDK** | AI 驱动的多 Agent 协作框架（可选） |
+| **Tree-sitter**                          | 165+ 编程语言的统一 AST 解析       |
+| **MCP**                                  | 工具调用的标准化协议               |
+| **Python 3.11+**                         | 主要开发语言                       |
 
 ## 📁 项目结构
 
 ```
 claude-deep-wiki/
 ├── src/
-│   ├── agents/                   # 三个分析 Agent
+│   ├── wiki_agents/              # 三个分析 Agent
 │   │   ├── structure_scanner_agent.py
 │   │   ├── semantic_analyzer_agent.py
 │   │   └── doc_generator_agent.py
@@ -188,15 +265,19 @@ claude-deep-wiki/
 │   │   ├── polyglot_parser.py   # Tree-sitter 解析器
 │   │   ├── dependency_analyzer.py
 │   │   ├── language_detector.py
-│   │   └── ...
+│   │   └── universal_extractor.py
 │   ├── utils/                    # 辅助工具
-│   │   ├── claude_query_helper.py  # Claude查询助手（带重试）
+│   │   ├── agent_factory.py     # Agent 工厂（统一创建接口）
+│   │   ├── unified_query_helper.py  # 统一查询助手
+│   │   ├── claude_query_helper.py   # Claude 查询助手
+│   │   ├── openai_query_helper.py   # OpenAI 查询助手
 │   │   ├── batch_analyzer.py    # 批处理管理
 │   │   ├── json_extractor.py    # JSON 提取
 │   │   └── *_prompt_builder.py  # 提示词构建
-│   ├── config.py                 # 配置文件
+│   ├── config.py                 # 配置文件（支持 .env）
 │   └── main.py                   # 主入口
-├── output/                       # 输出目录
+├── output/                       # 输出目录（可通过 .env 自定义）
+├── .env.example                  # 环境变量示例
 ├── requirements.txt              # Python 依赖
 └── README.md                     # 项目文档
 ```
@@ -212,18 +293,29 @@ claude-deep-wiki/
 
 ### 鲁棒性设计
 
-- **统一查询接口**：`ClaudeQueryHelper` 封装所有 Claude API 调用，集中处理错误
+- **统一抽象层**：
+  - `AgentFactory`：统一 Agent 创建接口，自动根据配置选择 SDK
+  - `UnifiedQueryHelper`：统一查询接口，屏蔽 SDK 差异
+  - SDK 特定实现：`ClaudeQueryHelper` 和 `OpenAIQueryHelper`
 - **自动错误恢复**：
-  - JSON 语法错误：自动重试，给 Claude 第二次机会
+  - JSON 语法错误：自动重试，给 AI 第二次机会
   - 模块分组遗漏：验证器检测后触发重试，确保完整性
   - 字段缺失：验证器实时检查，避免后续流程失败
 - **详细日志**：记录每次重试的原因，便于问题排查
+- **灵活部署**：支持 OpenAI 兼容的第三方 API（DeepSeek、Ollama 等）
 
-### Session 管理策略
+### Session/Thread 管理策略
 
-- **StructureScannerAgent**：每个子阶段独立 session（显式传递数据）
-- **SemanticAnalyzerAgent**：同一模块共享 session（保持上下文理解）
-- **DocGeneratorAgent**：按功能域独立 session（避免混淆）
+不同 SDK 的会话管理差异已被统一抽象：
+
+- **Claude SDK**：使用 session_id 字符串标识会话
+- **OpenAI SDK**：使用 Thread 对象管理会话上下文
+
+Agent 层面的策略：
+
+- **StructureScannerAgent**：每个子阶段独立会话（显式传递数据）
+- **SemanticAnalyzerAgent**：同一模块共享会话（保持上下文理解）
+- **DocGeneratorAgent**：按功能域独立会话（避免混淆）
 
 ### 批处理优化
 
@@ -242,4 +334,3 @@ claude-deep-wiki/
 ---
 
 **⭐ 如果这个项目对你有帮助，请给个 Star！**
-

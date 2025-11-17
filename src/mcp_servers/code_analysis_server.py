@@ -1,7 +1,8 @@
 """
 MCP 代码分析工具集
 
-提供给 Claude Agent SDK 使用的 MCP (Model Context Protocol) 工具集。
+提供给 Agent SDK 使用的 MCP (Model Context Protocol) 工具集。
+支持 Claude Agent SDK 和 OpenAI Agents SDK。
 
 工具列表:
 1. scan_repository_structure - 扫描代码仓库结构
@@ -18,11 +19,24 @@ from typing import Dict, List, Optional, Any
 import json
 import logging
 
-# Claude Agent SDK
-from claude_agent_sdk import tool, create_sdk_mcp_server
-
 # 添加 src 到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from config import AGENT_SDK
+
+# 根据配置导入相应的 SDK
+if AGENT_SDK == "claude":
+    try:
+        from claude_agent_sdk import tool, create_sdk_mcp_server
+        HAS_CLAUDE_SDK = True
+    except ImportError:
+        HAS_CLAUDE_SDK = False
+        tool = None
+        create_sdk_mcp_server = None
+else:
+    HAS_CLAUDE_SDK = False
+    tool = None
+    create_sdk_mcp_server = None
 
 from mcp_tools.language_detector import get_language_detector
 from mcp_tools.file_filter import FileFilter
@@ -576,13 +590,31 @@ def _generate_tree_view(files: List[Path], root: Path) -> str:
 
 
 # ============================================================================
-# Claude Agent SDK 工具定义
+# Agent SDK 工具定义
 # ============================================================================
 
-# 创建异步包装函数以适配 @tool 装饰器的要求
-# tool 装饰器期望：async def func(args: dict) -> dict
+# 创建异步包装函数以适配工具调用的要求
+# 这些函数对于 Claude SDK 会使用 @tool 装饰器
+# 对于 OpenAI SDK 会直接作为函数传递
 
-@tool(
+# 定义工具装饰器函数（条件应用）
+def conditional_tool(name, description, input_schema):
+    """条件性应用 @tool 装饰器"""
+    def decorator(func):
+        if AGENT_SDK == "claude" and HAS_CLAUDE_SDK:
+            # Claude SDK: 应用 @tool 装饰器
+            return tool(name=name, description=description, input_schema=input_schema)(func)
+        else:
+            # OpenAI SDK: 不应用装饰器，直接返回函数
+            # 但保存 metadata 供后续使用
+            func._tool_name = name
+            func._tool_description = description
+            func._tool_schema = input_schema
+            return func
+    return decorator
+
+
+@conditional_tool(
     name="scan_repository_structure",
     description="扫描代码仓库结构,返回目录树、文件统计和语言分布信息",
     input_schema={
@@ -628,7 +660,7 @@ async def scan_repo_tool(args: Dict[str, Any]) -> Dict[str, Any]:
         }]
     }
 
-@tool(
+@conditional_tool(
     name="extract_imports_and_exports",
     description="提取指定文件的导入导出关系、函数和类定义",
     input_schema={
@@ -665,7 +697,7 @@ async def extract_imports_tool(args: Dict[str, Any]) -> Dict[str, Any]:
         }]
     }
 
-@tool(
+@conditional_tool(
     name="analyze_code_block",
     description="深度分析代码片段,提取结构化信息(函数、类、导入等)",
     input_schema={
@@ -702,7 +734,7 @@ async def analyze_code_tool(args: Dict[str, Any]) -> Dict[str, Any]:
         }]
     }
 
-@tool(
+@conditional_tool(
     name="build_dependency_graph",
     description="构建模块依赖关系图,分析循环依赖和核心模块",
     input_schema={
@@ -745,7 +777,7 @@ async def build_dependency_tool(args: Dict[str, Any]) -> Dict[str, Any]:
         }]
     }
 
-@tool(
+@conditional_tool(
     name="search_code_patterns",
     description="搜索特定代码模式(API路由、数据库模型等)",
     input_schema={
@@ -782,7 +814,7 @@ async def search_patterns_tool(args: Dict[str, Any]) -> Dict[str, Any]:
         }]
     }
 
-@tool(
+@conditional_tool(
     name="validate_analysis_result",
     description="验证AI分析结果的准确性,防止编造",
     input_schema={
@@ -821,19 +853,73 @@ async def validate_analysis_tool(args: Dict[str, Any]) -> Dict[str, Any]:
 
 # 创建 MCP Server
 def create_code_analysis_mcp_server():
-    """创建代码分析 MCP Server"""
-    return create_sdk_mcp_server(
-        name="code-analysis-tools",
-        version="1.0.0",
-        tools=[
-            scan_repo_tool,
-            extract_imports_tool,
-            analyze_code_tool,
-            build_dependency_tool,
-            search_patterns_tool,
-            validate_analysis_tool
+    """
+    创建代码分析 MCP Server
+
+    根据配置返回适合的工具格式：
+    - Claude SDK: 返回 MCP Server 对象
+    - OpenAI SDK: 返回 FunctionTool 对象列表
+    """
+    if AGENT_SDK == "claude" and HAS_CLAUDE_SDK:
+        # Claude SDK: 使用 MCP Server
+        return create_sdk_mcp_server(
+            name="code-analysis-tools",
+            version="1.0.0",
+            tools=[
+                scan_repo_tool,
+                extract_imports_tool,
+                analyze_code_tool,
+                build_dependency_tool,
+                search_patterns_tool,
+                validate_analysis_tool
+            ]
+        )
+    else:
+        # OpenAI SDK: 使用 function_tool 装饰器包装函数
+        from agents import function_tool
+
+        # 包装每个工具函数为 FunctionTool
+        # strict_mode=False 避免 JSON schema 验证问题
+        tools = [
+            function_tool(
+                scan_repository_structure,
+                name_override="scan_repository_structure",
+                description_override="扫描代码仓库结构，返回目录树和文件统计",
+                strict_mode=False
+            ),
+            function_tool(
+                extract_imports_and_exports,
+                name_override="extract_imports_and_exports",
+                description_override="提取文件的导入导出关系",
+                strict_mode=False
+            ),
+            function_tool(
+                analyze_code_block,
+                name_override="analyze_code_block",
+                description_override="深度分析代码片段的语义",
+                strict_mode=False
+            ),
+            function_tool(
+                build_dependency_graph,
+                name_override="build_dependency_graph",
+                description_override="构建模块依赖关系图",
+                strict_mode=False
+            ),
+            function_tool(
+                search_code_patterns,
+                name_override="search_code_patterns",
+                description_override="搜索特定代码模式",
+                strict_mode=False
+            ),
+            function_tool(
+                validate_analysis_result,
+                name_override="validate_analysis_result",
+                description_override="验证分析结果准确性",
+                strict_mode=False
+            )
         ]
-    )
+
+        return tools
 
 
 if __name__ == "__main__":

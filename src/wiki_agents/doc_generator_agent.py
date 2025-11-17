@@ -10,16 +10,15 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
-
 # 添加 src 到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.prd_prompt_builder import PRDPromptBuilder
 from utils.json_extractor import JSONExtractor
 from utils.debug_helper import DebugHelper
-from utils.claude_query_helper import ClaudeQueryHelper
-from config import ANTHROPIC_AUTH_TOKEN, MAX_TURNS, OUTPUT_DIR
+from utils.unified_query_helper import UnifiedQueryHelper
+from utils.agent_factory import AgentFactory
+from config import AGENT_SDK, OUTPUT_DIR
 
 
 class DocGeneratorAgent:
@@ -35,19 +34,16 @@ class DocGeneratorAgent:
         self.debug_helper = debug_helper
         self.prd_dir = os.path.join(OUTPUT_DIR, "prd")
 
-        # 创建 Claude Client（不需要 MCP 工具，只需要生成文档）
-        self.client = ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                env={"ANTHROPIC_AUTH_TOKEN": ANTHROPIC_AUTH_TOKEN},
-                mcp_servers={},  # 不需要 MCP 工具
-                allowed_tools=[],  # 不需要工具
-                system_prompt="你是一位资深的产品经理，擅长将技术分析转换为产品需求文档。",
-                max_turns=MAX_TURNS,
-                permission_mode="bypassPermissions"
-            )
+        # 使用工厂创建 Agent（根据配置自动选择 Claude 或 OpenAI）
+        # 文档生成不需要 MCP 工具
+        self.client, self.openai_client, self._threads = AgentFactory.create_client(
+            name="DocGenerator",
+            instructions="你是一位资深的产品经理，擅长将技术分析转换为产品需求文档。",
+            mcp_server=None,
+            tools=[]
         )
 
-        self._connected = False  # 连接状态
+        self._connected = False  # 连接状态（仅 Claude 需要）
 
         # 创建输出目录
         os.makedirs(self.prd_dir, exist_ok=True)
@@ -67,9 +63,9 @@ class DocGeneratorAgent:
         Returns:
             生成结果
         """
-        # 确保已连接
+        # 确保已连接（仅 Claude 需要）
         if not self._connected:
-            await self.client.connect()
+            await AgentFactory.connect_client(self.client)
             self._connected = True
 
         modules_analysis = semantic_result.get('modules_analysis', {})
@@ -209,10 +205,10 @@ class DocGeneratorAgent:
                     return False
                 return True
 
-            response_text, grouping_data = await ClaudeQueryHelper.query_with_json_retry(
+            response_text, grouping_data = await UnifiedQueryHelper.query_with_json_retry(
                 client=self.client,
                 prompt=prompt,
-                session_id="doc_gen_grouping",
+                session_id=self._get_session_id("doc_gen_grouping"),
                 max_attempts=3,
                 validator=validate_complete_grouping
             )
@@ -392,13 +388,13 @@ class DocGeneratorAgent:
             repo_path
         )
 
-        # 调用 Claude API
+        # 调用 API
         try:
-            # 使用独立的 session_id 避免上下文累积
-            index_content = await ClaudeQueryHelper.query_with_text(
+            # 使用独立的 session/thread 避免上下文累积
+            index_content = await UnifiedQueryHelper.query_with_text(
                 client=self.client,
                 prompt=prompt,
-                session_id="doc_gen_index"
+                session_id=self._get_session_id("doc_gen_index")
             )
 
             # 保存 Index.md 到 prd 目录
@@ -450,14 +446,14 @@ class DocGeneratorAgent:
             domain_info, modules_data, repo_path
         )
 
-        # 使用独立的 session_id 避免上下文累积（每个domain使用独立会话）
+        # 使用独立的 session/thread 避免上下文累积（每个domain使用独立线程）
         domain_name = domain_info.get('domain_name', 'unknown')
-        session_id = f"doc_gen_prd_{domain_name}"
+        session_key = f"doc_gen_prd_{domain_name}"
 
-        prd_content = await ClaudeQueryHelper.query_with_text(
+        prd_content = await UnifiedQueryHelper.query_with_text(
             client=self.client,
             prompt=prompt,
-            session_id=session_id
+            session_id=self._get_session_id(session_key)
         )
 
         return prd_content
@@ -511,14 +507,14 @@ class DocGeneratorAgent:
                         domain_info, batch_modules, batch_idx + 1, num_batches, repo_path
                     )
 
-                # 同一domain的所有batch使用相同session_id，保持上下文连续性
+                # 同一domain的所有batch使用相同session/thread，保持上下文连续性
                 # 这样后续batch可以参考第一批建立的框架和风格
-                session_id = f"doc_gen_prd_{domain_name}"
+                session_key = f"doc_gen_prd_{domain_name}"
 
-                batch_content = await ClaudeQueryHelper.query_with_text(
+                batch_content = await UnifiedQueryHelper.query_with_text(
                     client=self.client,
                     prompt=prompt,
-                    session_id=session_id
+                    session_id=self._get_session_id(session_key)
                 )
 
                 batch_contents.append(batch_content)
@@ -687,10 +683,23 @@ class DocGeneratorAgent:
 
         return cleaned
 
+    def _get_session_id(self, session_key: str) -> Optional[str]:
+        """
+        获取会话ID（Claude 或 OpenAI）
+
+        Args:
+            session_key: 会话标识符
+
+        Returns:
+            Claude: 返回 session_key
+            OpenAI: 返回 threads.get(session_key) 或 None
+        """
+        return AgentFactory.get_session_id(session_key, self._threads)
+
     async def disconnect(self):
         """断开连接并清理资源"""
         if self._connected:
-            await self.client.disconnect()
+            await AgentFactory.disconnect_client(self.client, self.openai_client)
             self._connected = False
 
 

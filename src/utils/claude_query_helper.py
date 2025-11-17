@@ -117,4 +117,3 @@ class ClaudeQueryHelper:
                         response_text += block.text
 
         return response_text
-

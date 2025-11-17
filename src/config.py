@@ -4,6 +4,13 @@
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
+
+# 加载 .env 文件（如果存在）
+# 优先级：环境变量 > .env 文件 > 默认值
+dotenv_path = Path(__file__).parent.parent / '.env'
+if dotenv_path.exists():
+    load_dotenv(dotenv_path)
 
 # ============================================================================
 # 目录配置
@@ -13,7 +20,13 @@ import os
 PROJECT_ROOT = Path(__file__).parent.parent
 
 # 输出目录
-OUTPUT_DIR = PROJECT_ROOT / "output"
+# 支持从环境变量读取:
+# - 如果提供绝对路径，直接使用
+# - 如果提供相对路径，相对于项目根目录
+# - 如果未设置，使用默认路径 PROJECT_ROOT/output
+_output_dir_str = os.environ.get("OUTPUT_DIR", "output")
+_output_path = Path(_output_dir_str)
+OUTPUT_DIR = _output_path if _output_path.is_absolute() else PROJECT_ROOT / _output_dir_str
 
 # Debug 输出目录
 DEBUG_DIR = OUTPUT_DIR / "debug"
@@ -54,11 +67,36 @@ PROMPT_RESERVED_TOKENS = 20000
 # API 配置
 # ============================================================================
 
+# Agent SDK 选择（从环境变量读取，可选值: "claude" 或 "openai"）
+# 默认: "openai"
+AGENT_SDK = os.environ.get("AGENT_SDK", "openai").lower()
+
+# === Claude Agent SDK 配置 ===
 # Anthropic API Token（从环境变量读取）
 ANTHROPIC_AUTH_TOKEN = os.environ.get("ANTHROPIC_AUTH_TOKEN")
 
-# 默认模型
-DEFAULT_MODEL = None  # None 表示使用 SDK 默认模型
+# Claude 默认模型
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", None)  # None 表示使用 SDK 默认模型
+
+# === OpenAI Agents SDK 配置 ===
+# OpenAI API Key（从环境变量读取）
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+# OpenAI API Base URL（从环境变量读取，可选）
+# 用于支持自定义 API 端点（如 Azure OpenAI、代理服务等）
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL")  # None 表示使用默认地址
+
+# OpenAI 默认模型（可通过环境变量自定义）
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+
+# === 统一模型配置（两个 SDK 都适用）===
+# 根据选择的 SDK 设置默认模型
+DEFAULT_MODEL = CLAUDE_MODEL if AGENT_SDK == "claude" else OPENAI_MODEL
+
+# 模型参数（可通过环境变量自定义）
+MODEL_TEMPERATURE = float(os.environ.get("MODEL_TEMPERATURE", "0.7"))  # 温度参数，控制随机性
+MODEL_TOP_P = float(os.environ.get("MODEL_TOP_P", "1.0"))  # Top-p 采样参数
+MODEL_MAX_TOKENS = int(os.environ.get("MODEL_MAX_TOKENS", "4096"))  # 最大生成 token 数
 
 
 # ============================================================================
@@ -143,7 +181,7 @@ def get_config_summary() -> dict:
         "debug_dir": str(DEBUG_DIR),
         "max_turns": MAX_TURNS,
         "max_file_size_mb": MAX_FILE_SIZE_MB,
-        "has_api_token": bool(ANTHROPIC_AUTH_TOKEN),
+        "has_api_key": bool(OPENAI_API_KEY),
         "log_level": LOG_LEVEL,
         "verbose": VERBOSE,
         "debug": DEBUG,

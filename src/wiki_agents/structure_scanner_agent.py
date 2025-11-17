@@ -16,16 +16,15 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
-
 # 添加 src 到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp_servers.code_analysis_server import create_code_analysis_mcp_server
-from config import ANTHROPIC_AUTH_TOKEN, MAX_TURNS
+from config import AGENT_SDK
 from utils.structure_prompt_builder import StructurePromptBuilder
 from utils.json_extractor import JSONExtractor
-from utils.claude_query_helper import ClaudeQueryHelper
+from utils.unified_query_helper import UnifiedQueryHelper
+from utils.agent_factory import AgentFactory
 
 logger = None  # 简化日志
 
@@ -46,19 +45,14 @@ class StructureScannerAgent:
         # 创建 MCP Server
         self._mcp_server = create_code_analysis_mcp_server()
 
-        # 创建 Claude Client
-        self.client = ClaudeSDKClient(
-            options=ClaudeAgentOptions(
-                env={"ANTHROPIC_AUTH_TOKEN": ANTHROPIC_AUTH_TOKEN},
-                mcp_servers={"code-analysis": self._mcp_server},
-                allowed_tools=["code-analysis/*"],
-                system_prompt="你是代码仓库结构分析专家，擅长识别项目模块划分和依赖关系。",
-                max_turns=MAX_TURNS,
-                permission_mode="bypassPermissions"  # 启用完全文件系统访问权限
-            )
+        # 使用工厂创建 Agent（根据配置自动选择 Claude 或 OpenAI）
+        self.client, self.openai_client, self._threads = AgentFactory.create_client(
+            name="StructureScanner",
+            instructions="你是代码仓库结构分析专家，擅长识别项目模块划分和依赖关系。",
+            mcp_server=self._mcp_server
         )
 
-        self._connected = False  # 连接状态
+        self._connected = False  # 连接状态（仅 Claude 需要）
 
     async def scan_repository(self, repo_path: str) -> Dict[str, Any]:
         """
@@ -79,9 +73,9 @@ class StructureScannerAgent:
                 "file_module_mapping": {...}
             }
         """
-        # 确保已连接（首次调用时）
+        # 确保已连接（仅 Claude 需要）
         if not self._connected:
-            await self.client.connect()
+            await AgentFactory.connect_client(self.client)
             self._connected = True
 
         # 尝试加载完整缓存
@@ -168,16 +162,16 @@ class StructureScannerAgent:
         # 使用 PromptBuilder 构建提示词
         prompt = StructurePromptBuilder.build_scan_and_identify_prompt(repo_path)
 
-        # Phase 1 使用独立session
+        # Phase 1 使用独立session/thread
         # 原因：下一阶段会通过结构化数据传递输出，不需要对话历史
 
-        # 使用带重试的查询，验证返回的JSON包含modules字段
-        response_text, overview = await ClaudeQueryHelper.query_with_json_retry(
+        # 使用统一查询助手（自动适配 Claude 或 OpenAI）
+        response_text, overview = await UnifiedQueryHelper.query_with_json_retry(
             client=self.client,
             prompt=prompt,
-            session_id="structure_scan_phase1",
+            session_id=self._get_session_id("structure_scan_phase1"),
             max_attempts=3,
-            validator=lambda r: r and r.get('modules')
+            validator=lambda r: bool(r and r.get('modules'))
         )
 
         self.last_response = response_text
@@ -227,16 +221,16 @@ class StructureScannerAgent:
             repo_path, all_key_files
         )
 
-        # Phase 2 使用独立session，避免Phase 1对话历史的冗余
+        # Phase 2 使用独立session/thread，避免Phase 1对话历史的冗余
         # 必要的信息已通过 all_key_files 参数显式传递
 
-        # 使用带重试的查询，验证返回的JSON包含file_dependencies字段
-        response_text, dependencies = await ClaudeQueryHelper.query_with_json_retry(
+        # 使用统一查询助手
+        response_text, dependencies = await UnifiedQueryHelper.query_with_json_retry(
             client=self.client,
             prompt=prompt,
-            session_id="structure_scan_phase2",
+            session_id=self._get_session_id("structure_scan_phase2"),
             max_attempts=3,
-            validator=lambda r: r and r.get('file_dependencies')
+            validator=lambda r: bool(r and r.get('file_dependencies'))
         )
 
         self.last_response = response_text
@@ -269,25 +263,38 @@ class StructureScannerAgent:
             structure_overview, dependencies
         )
 
-        # Phase 3 使用独立session，避免前两阶段对话历史的冗余
+        # Phase 3 使用独立session/thread，避免前两阶段对话历史的冗余
         # Phase 1和2的输出已通过 structure_overview 和 dependencies 参数显式传递
 
-        # 使用带重试的查询，验证返回的JSON包含module_hierarchy字段
-        response_text, final_structure = await ClaudeQueryHelper.query_with_json_retry(
+        # 使用统一查询助手
+        response_text, final_structure = await UnifiedQueryHelper.query_with_json_retry(
             client=self.client,
             prompt=prompt,
-            session_id="structure_scan_phase3",
+            session_id=self._get_session_id("structure_scan_phase3"),
             max_attempts=3,
-            validator=lambda r: r and r.get('module_hierarchy')
+            validator=lambda r: bool(r and r.get('module_hierarchy'))
         )
 
         self.last_response = response_text
         return final_structure
 
+    def _get_session_id(self, session_key: str) -> Optional[str]:
+        """
+        获取会话ID（Claude 或 OpenAI）
+
+        Args:
+            session_key: 会话标识符
+
+        Returns:
+            Claude: 返回 session_key
+            OpenAI: 返回 threads.get(session_key) 或 None
+        """
+        return AgentFactory.get_session_id(session_key, self._threads)
+
     async def disconnect(self):
         """断开连接并清理资源"""
         if self._connected:
-            await self.client.disconnect()
+            await AgentFactory.disconnect_client(self.client, self.openai_client)
             self._connected = False
 
 

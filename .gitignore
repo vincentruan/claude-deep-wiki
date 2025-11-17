@@ -43,3 +43,6 @@ output/
 # Temporary files
 *.tmp
 .cache/
+
+# Environment variables
+.env
