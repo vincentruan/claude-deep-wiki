@@ -176,12 +176,28 @@ class AgentFactory:
         # 注意：直接传字符串会使用Responses API，不兼容第三方API
         from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
-        model = OpenAIChatCompletionsModel(
-            model=DEFAULT_MODEL,
-            openai_client=openai_client,
-            stream=ENABLE_STREAMING  # 支持流式响应
-        )
-        logger.info(f"[AgentFactory] Created OpenAIChatCompletionsModel for {DEFAULT_MODEL}")
+        # 如果需要流式响应，创建自定义 Model 类
+        if ENABLE_STREAMING:
+            class StreamingOpenAIChatCompletionsModel(OpenAIChatCompletionsModel):
+                """支持流式响应的 OpenAI Chat Completions Model"""
+
+                async def _fetch_response(self, *args, **kwargs):
+                    """覆盖 _fetch_response 方法，强制启用流式响应"""
+                    kwargs['stream'] = True
+                    return await super()._fetch_response(*args, **kwargs)
+
+            model = StreamingOpenAIChatCompletionsModel(
+                model=DEFAULT_MODEL,
+                openai_client=openai_client
+            )
+            logger.info(f"[AgentFactory] Created StreamingOpenAIChatCompletionsModel for {DEFAULT_MODEL}")
+        else:
+            model = OpenAIChatCompletionsModel(
+                model=DEFAULT_MODEL,
+                openai_client=openai_client
+            )
+            logger.info(f"[AgentFactory] Created OpenAIChatCompletionsModel for {DEFAULT_MODEL}")
+
         logger.info(f"[AgentFactory] Streaming mode: {'enabled' if ENABLE_STREAMING else 'disabled'}")
 
         # 创建 Agent（使用显式的Model对象而不是字符串）
