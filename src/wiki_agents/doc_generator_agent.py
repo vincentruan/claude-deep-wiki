@@ -180,6 +180,7 @@ class DocGeneratorAgent:
         prompt = PRDPromptBuilder.build_product_grouping_prompt(modules_summary)
 
         # 调用 Claude API
+        response_text = None  # Initialize to avoid unbound variable
         try:
             # 使用独立的 session_id 避免上下文累积
             # 使用带重试的查询，验证返回的JSON包含product_domains字段且所有模块都被分配
@@ -229,7 +230,10 @@ class DocGeneratorAgent:
 
         except json.JSONDecodeError as e:
             print(f"  ❌ JSON 解析失败: {str(e)}")
-            print(f"  响应内容: {response_text[:500]}...")
+            if response_text:
+                print(f"  响应内容: {response_text[:500]}...")
+            else:
+                print("  响应内容: 无法获取响应内容")
             return None
         except Exception as e:
             print(f"  ❌ 智能分组失败: {str(e)}")
@@ -723,7 +727,7 @@ async def test_doc_generator():
 
     # 初始化
     debug_helper = DebugHelper(enabled=True, verbose=True)
-    generator = DocGeneratorAgent(debug_helper, verbose=True)
+    generator = DocGeneratorAgent(debug_helper)
 
     # 加载语义分析结果
     print("\n📂 加载语义分析结果...")
