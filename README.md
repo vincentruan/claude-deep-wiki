@@ -1,13 +1,9 @@
-# Claude DeepWiki
+# DeepWiki
 
 > 智能代码仓库分析工具，支持 Claude Agent SDK 和 OpenAI Agents SDK，自动生成业务导向的项目知识库
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-## 若希望了解更多AI探索相关的内容，可关注作者公众号
-
-<img src="https://wechat-account-1251781786.cos.ap-guangzhou.myqcloud.com/wechat_account.jpeg" width="30%">
 
 ## 📖 项目背景
 
@@ -36,7 +32,7 @@
 
 ### 2. 三阶段多 Agent 协作
 
-```
+```plaintext
 📊 结构扫描 → 🧠 语义分析 → 📄 文档生成
 ```
 
@@ -110,11 +106,11 @@ def validate_analysis_result(analysis: dict) -> dict:
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/your-username/claude-deep-wiki.git
+git clone ${repo_url}/claude-deep-wiki.git
 cd claude-deep-wiki
 
 # 2. 创建虚拟环境
-python3.11 -m venv .venv
+python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # 3. 安装依赖
@@ -213,7 +209,7 @@ python src/main.py /path/to/your/repo
 
 分析完成后，在**被分析代码仓库**的输出目录查看结果（默认为 `.wiki/`）：
 
-```
+```plaintext
 /path/to/your/repo/.wiki/         # 输出目录（在被分析的代码仓库下）
 ├── prd/                          # 产品需求文档
 │   ├── Index.md                  # 功能域导航索引
@@ -355,7 +351,3 @@ Agent 层面的策略：
 ## 📄 License
 
 [MIT License](LICENSE)
-
----
-
-**⭐ 如果这个项目对你有帮助，请给个 Star！**
