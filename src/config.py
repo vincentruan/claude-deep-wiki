@@ -19,20 +19,17 @@ if dotenv_path.exists():
 # 项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
 
-# 输出目录
-# 支持从环境变量读取:
-# - 如果提供绝对路径，直接使用
-# - 如果提供相对路径，相对于项目根目录
-# - 如果未设置，使用默认路径 PROJECT_ROOT/output
-_output_dir_str = os.environ.get("OUTPUT_DIR", "output")
-_output_path = Path(_output_dir_str)
-OUTPUT_DIR = _output_path if _output_path.is_absolute() else PROJECT_ROOT / _output_dir_str
+# 输出目录配置
+# 注意：这里只是定义输出目录的相对路径名称，实际路径将在运行时动态设置
+# - 如果 OUTPUT_DIR 环境变量是绝对路径，则使用该绝对路径
+# - 如果 OUTPUT_DIR 环境变量是相对路径（或未设置），则相对于被分析的代码仓库
+# 默认值: ".wiki"（会在被分析的代码仓库下创建 .wiki 目录）
+OUTPUT_DIR_NAME = os.environ.get("OUTPUT_DIR", ".wiki")
 
-# Debug 输出目录
-DEBUG_DIR = OUTPUT_DIR / "debug"
-
-# 默认输出文件
-DEFAULT_OUTPUT_FILE = OUTPUT_DIR / "business_modules.md"
+# 运行时会被设置的全局变量（由 set_output_dir() 函数设置）
+OUTPUT_DIR = None
+DEBUG_DIR = None
+DEFAULT_OUTPUT_FILE = None
 
 
 # ============================================================================
@@ -163,13 +160,42 @@ DEFAULT_EXCLUDE_PATTERNS = {
 # 工具函数
 # ============================================================================
 
+def set_output_dir(repo_path: str):
+    """
+    设置输出目录（基于被分析的代码仓库路径）
+
+    Args:
+        repo_path: 被分析的代码仓库路径
+    """
+    global OUTPUT_DIR, DEBUG_DIR, DEFAULT_OUTPUT_FILE
+
+    repo_path = Path(repo_path).resolve()
+
+    # 判断 OUTPUT_DIR_NAME 是绝对路径还是相对路径
+    output_path = Path(OUTPUT_DIR_NAME)
+    if output_path.is_absolute():
+        # 绝对路径，直接使用
+        OUTPUT_DIR = output_path
+    else:
+        # 相对路径，相对于被分析的代码仓库
+        OUTPUT_DIR = repo_path / OUTPUT_DIR_NAME
+
+    # 设置派生目录
+    DEBUG_DIR = OUTPUT_DIR / "debug"
+    DEFAULT_OUTPUT_FILE = OUTPUT_DIR / "business_modules.md"
+
+
 def ensure_output_dir():
     """确保输出目录存在"""
+    if OUTPUT_DIR is None:
+        raise RuntimeError("OUTPUT_DIR 未初始化，请先调用 set_output_dir()")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_debug_dir():
     """确保 debug 目录存在"""
+    if DEBUG_DIR is None:
+        raise RuntimeError("DEBUG_DIR 未初始化，请先调用 set_output_dir()")
     DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -177,8 +203,8 @@ def get_config_summary() -> dict:
     """获取配置摘要"""
     return {
         "project_root": str(PROJECT_ROOT),
-        "output_dir": str(OUTPUT_DIR),
-        "debug_dir": str(DEBUG_DIR),
+        "output_dir": str(OUTPUT_DIR) if OUTPUT_DIR else "未初始化",
+        "debug_dir": str(DEBUG_DIR) if DEBUG_DIR else "未初始化",
         "max_turns": MAX_TURNS,
         "max_file_size_mb": MAX_FILE_SIZE_MB,
         "has_api_key": bool(OPENAI_API_KEY),
@@ -192,6 +218,5 @@ def get_config_summary() -> dict:
 # 初始化
 # ============================================================================
 
-# 确保输出目录存在
-ensure_output_dir()
+# 注意：输出目录不在模块加载时创建，而是在调用 set_output_dir() 后按需创建
 

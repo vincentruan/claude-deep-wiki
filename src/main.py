@@ -14,6 +14,7 @@ from wiki_agents.structure_scanner_agent import StructureScannerAgent
 from wiki_agents.semantic_analyzer_agent import SemanticAnalyzerAgent
 from wiki_agents.doc_generator_agent import DocGeneratorAgent
 from utils.debug_helper import DebugHelper
+import config
 
 
 async def main():
@@ -36,10 +37,14 @@ async def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # 初始化输出目录（基于被分析的代码仓库路径）
+    config.set_output_dir(args.repo_path)
+
     print("\n" + "="*60)
     print("🚀 代码仓库深度分析")
     print("="*60)
-    print(f"📁 仓库: {args.repo_path}\n")
+    print(f"📁 仓库: {args.repo_path}")
+    print(f"📂 输出: {config.OUTPUT_DIR}\n")
 
     debug_helper = DebugHelper(enabled=True, verbose=False)
 

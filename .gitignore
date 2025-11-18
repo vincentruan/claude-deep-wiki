@@ -38,6 +38,7 @@ env/
 
 # Output & Debug
 output/
+.wiki/
 *.log
 
 # Temporary files
@@ -46,3 +47,5 @@ output/
 
 # Environment variables
 .env
+
+*.zip

@@ -146,7 +146,8 @@ export MODEL_TOP_P="1.0"                  # 默认: 1.0，范围 0.0-1.0
 export MODEL_MAX_TOKENS="4096"            # 默认: 4096
 
 # （可选）自定义输出目录
-export OUTPUT_DIR="output"                # 相对路径（相对于项目根目录）
+# 重要：相对路径将基于被分析的代码仓库，而非本项目目录
+export OUTPUT_DIR=".wiki"                 # 相对路径（相对于被分析的代码仓库，默认值）
 # 或
 export OUTPUT_DIR="/absolute/path/to/output"  # 绝对路径
 ```
@@ -192,7 +193,7 @@ export MODEL_MAX_TOKENS="4096"            # 默认: 4096
 | `MODEL_TEMPERATURE`    | 模型温度（0.0-2.0）                          | `0.7`          |
 | `MODEL_TOP_P`          | Top-p 采样参数（0.0-1.0）                    | `1.0`          |
 | `MODEL_MAX_TOKENS`     | 最大输出 token 数                            | `4096`         |
-| `OUTPUT_DIR`           | 输出目录路径（相对或绝对路径）               | `"output"`     |
+| `OUTPUT_DIR`           | 输出目录路径（相对路径基于被分析仓库）       | `".wiki"`      |
 
 ### 运行分析
 
@@ -203,10 +204,10 @@ python src/main.py /path/to/your/repo
 
 ### 查看结果
 
-分析完成后，在 `output/` 目录查看结果：
+分析完成后，在**被分析代码仓库**的输出目录查看结果（默认为 `.wiki/`）：
 
 ```
-output/
+/path/to/your/repo/.wiki/         # 输出目录（在被分析的代码仓库下）
 ├── prd/                          # 产品需求文档
 │   ├── Index.md                  # 功能域导航索引
 │   ├── 用户认证与授权.md         # 各功能域的详细PRD
@@ -216,6 +217,24 @@ output/
     ├── 01_structure_scan_final_*.json
     ├── 02_semantic_analysis_final_*.json
     └── ...
+```
+
+**示例**：
+
+```bash
+# 分析项目
+python src/main.py /Users/username/my-project
+
+# 结果将输出到
+# /Users/username/my-project/.wiki/prd/
+# /Users/username/my-project/.wiki/debug/
+```
+
+**建议**：将 `.wiki/` 添加到被分析项目的 `.gitignore` 文件中，避免提交分析结果到版本控制系统。
+
+```bash
+# 在被分析的项目根目录下
+echo ".wiki/" >> .gitignore
 ```
 
 **PRD 文档结构**：
@@ -276,7 +295,6 @@ claude-deep-wiki/
 │   │   └── *_prompt_builder.py  # 提示词构建
 │   ├── config.py                 # 配置文件（支持 .env）
 │   └── main.py                   # 主入口
-├── output/                       # 输出目录（可通过 .env 自定义）
 ├── .env.example                  # 环境变量示例
 ├── requirements.txt              # Python 依赖
 └── README.md                     # 项目文档
