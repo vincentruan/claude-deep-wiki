@@ -1,11 +1,11 @@
-# Agent SDK Dependencies (支持两种选择)
-# 使用 OpenAI Agents SDK
-openai-agents>=0.5.0                  # OpenAI Agents SDK (独立包)
-openai>=1.55.0                        # OpenAI API client (Agents SDK 的依赖)
+# Agent SDK Dependencies (two options supported)
+# Using OpenAI Agents SDK
+openai-agents>=0.5.0                  # OpenAI Agents SDK (standalone package)
+openai>=1.55.0                        # OpenAI API client (dependency of Agents SDK)
 
-# 使用 Claude Agent SDK (可选)
-# claude-agent-sdk>=0.1.3             # Claude API client (需要从 GitHub 安装)
-# 注意：claude-agent-sdk 目前未发布到 PyPI，需要手动安装：
+# Using Claude Agent SDK (optional)
+# claude-agent-sdk>=0.1.3             # Claude API client (requires GitHub installation)
+# Note: claude-agent-sdk is not published to PyPI yet, manual installation required:
 # pip install git+https://github.com/anthropics/anthropic-sdk-python.git
 
 # Code Parsing and Analysis
