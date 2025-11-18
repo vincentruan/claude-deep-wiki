@@ -18,7 +18,7 @@ from utils.json_extractor import JSONExtractor
 from utils.debug_helper import DebugHelper
 from utils.unified_query_helper import UnifiedQueryHelper
 from utils.agent_factory import AgentFactory
-from config import AGENT_SDK, OUTPUT_DIR
+import config
 
 
 class DocGeneratorAgent:
@@ -32,7 +32,7 @@ class DocGeneratorAgent:
             debug_helper: 调试助手
         """
         self.debug_helper = debug_helper
-        self.prd_dir = os.path.join(OUTPUT_DIR, "prd")
+        self.prd_dir = os.path.join(config.OUTPUT_DIR, "prd")
 
         # 使用工厂创建 Agent（根据配置自动选择 Claude 或 OpenAI）
         # 文档生成不需要 MCP 工具

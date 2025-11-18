@@ -95,18 +95,38 @@ class OpenAIQueryHelper:
                                     if text:
                                         response_text += text
 
+                # 记录响应长度
+                logger.info(f"[OpenAI Query] Response length: {len(response_text)} chars")
+
+                # 检查响应是否被截断（检测 JSON 不完整的迹象）
+                response_stripped = response_text.strip()
+                if response_stripped and not response_stripped.endswith('}'):
+                    logger.warning(f"[OpenAI Query] Response appears truncated (doesn't end with '}}'), last 100 chars: ...{response_text[-100:]}")
+
                 # 提取JSON
                 parsed_json = JSONExtractor.extract(response_text)
 
                 # 检查是否提取到有效JSON
                 if not parsed_json:
-                    last_error = "JSON提取失败：返回空字典"
+                    # 提供更详细的错误信息
+                    if response_stripped and not response_stripped.endswith('}'):
+                        last_error = "JSON提取失败：响应被截断（可能是 token 长度限制导致）"
+                        logger.error(f"[OpenAI Query] {last_error}")
+                        logger.error(f"[OpenAI Query] Response preview (first 200 chars): {response_text[:200]}...")
+                        logger.error(f"[OpenAI Query] Response ending (last 200 chars): ...{response_text[-200:]}")
+                    else:
+                        last_error = "JSON提取失败：返回空字典或无效格式"
+                        logger.error(f"[OpenAI Query] {last_error}")
+                        logger.error(f"[OpenAI Query] Response preview: {response_text[:500]}...")
+
                     if attempt < max_attempts:
                         print(f"          ⚠️  JSON提取失败，重试 {attempt}/{max_attempts-1}...")
+                        print(f"             原因: {last_error}")
                         continue
                     else:
                         print(f"          ❌ JSON提取失败，已达最大重试次数")
-                        raise ValueError(f"JSON提取失败（尝试{max_attempts}次）")
+                        print(f"             原因: {last_error}")
+                        raise ValueError(f"JSON提取失败（尝试{max_attempts}次），{last_error}")
 
                 # 如果提供了验证器，执行验证
                 if validator and not validator(parsed_json):
