@@ -9,7 +9,7 @@ import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from config import DEBUG_DIR, ensure_debug_dir
+import config
 
 
 class DebugHelper:
@@ -25,11 +25,16 @@ class DebugHelper:
         """
         self.enabled = enabled
         self.verbose = verbose
-        self.debug_dir = DEBUG_DIR
+        self._debug_dir_ensured = False
 
-        if self.enabled:
-            ensure_debug_dir()
-            self._log(f"🐛 调试模式已启用，中间结果将保存到: {self.debug_dir}")
+    @property
+    def debug_dir(self):
+        """动态获取 debug 目录"""
+        if self.enabled and not self._debug_dir_ensured:
+            config.ensure_debug_dir()
+            self._log(f"🐛 调试模式已启用，中间结果将保存到: {config.DEBUG_DIR}")
+            self._debug_dir_ensured = True
+        return config.DEBUG_DIR
 
     def save_stage_data(self, stage: str, raw_response: str, extracted_data: Any):
         """
@@ -139,7 +144,7 @@ class DebugHelper:
         Returns:
             缓存的文档内容，如果不存在或读取失败则返回 None
         """
-        if not self.enabled or not self.debug_dir.exists():
+        if not self.enabled or self.debug_dir is None or not self.debug_dir.exists():
             return None
 
         # 清理 stage 名称，替换不安全的文件名字符
@@ -175,7 +180,7 @@ class DebugHelper:
         Returns:
             缓存的数据，如果不存在或读取失败则返回 None
         """
-        if not self.enabled or not self.debug_dir.exists():
+        if not self.enabled or self.debug_dir is None or not self.debug_dir.exists():
             return None
 
         # 清理 stage 名称，替换不安全的文件名字符
@@ -208,7 +213,7 @@ class DebugHelper:
         Returns:
             包含 debug 文件统计信息的字典
         """
-        if not self.enabled or not self.debug_dir.exists():
+        if not self.enabled or self.debug_dir is None or not self.debug_dir.exists():
             return {"enabled": False}
 
         files = list(self.debug_dir.glob("*"))
@@ -343,7 +348,7 @@ class DebugHelper:
         """
         import re
 
-        if not self.enabled or not self.debug_dir.exists():
+        if not self.enabled or self.debug_dir is None or not self.debug_dir.exists():
             return None
 
         # 清理模块名（移除特殊字符）
@@ -407,7 +412,7 @@ class DebugHelper:
         Returns:
             批次列表，如果不存在或加载失败则返回 None
         """
-        if not self.enabled or not batch_dir.exists():
+        if not self.enabled or batch_dir is None or not batch_dir.exists():
             return None
 
         # 清理模块名
