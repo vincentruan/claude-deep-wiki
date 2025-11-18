@@ -178,13 +178,101 @@ class AgentFactory:
 
         # 如果需要流式响应，创建自定义 Model 类
         if ENABLE_STREAMING:
+            from openai.types.chat import ChatCompletion
+            from openai import AsyncStream
+            from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
+
             class StreamingOpenAIChatCompletionsModel(OpenAIChatCompletionsModel):
                 """支持流式响应的 OpenAI Chat Completions Model"""
 
                 async def _fetch_response(self, *args, **kwargs):
-                    """覆盖 _fetch_response 方法，强制启用流式响应"""
+                    """
+                    覆盖 _fetch_response 方法，强制启用流式响应
+
+                    流式模式下需要处理 AsyncStream，将其转换为完整的 ChatCompletion 对象
+                    """
                     kwargs['stream'] = True
-                    return await super()._fetch_response(*args, **kwargs)
+                    result = await super()._fetch_response(*args, **kwargs)
+
+                    # 流式响应返回 tuple: (Response, AsyncStream[ChatCompletionChunk])
+                    if isinstance(result, tuple):
+                        response, stream = result
+
+                        # 收集流式响应的所有 chunk
+                        collected_messages = []
+                        collected_tool_calls = {}
+                        finish_reason = None
+
+                        async for chunk in stream:
+                            if chunk.choices:
+                                choice = chunk.choices[0]
+
+                                # 收集消息内容
+                                if choice.delta.content:
+                                    collected_messages.append(choice.delta.content)
+
+                                # 收集 tool calls
+                                if choice.delta.tool_calls:
+                                    for tool_call in choice.delta.tool_calls:
+                                        idx = tool_call.index
+                                        if idx not in collected_tool_calls:
+                                            collected_tool_calls[idx] = {
+                                                'id': tool_call.id or '',
+                                                'type': tool_call.type or 'function',
+                                                'function': {
+                                                    'name': tool_call.function.name or '',
+                                                    'arguments': ''
+                                                }
+                                            }
+                                        if tool_call.function and tool_call.function.arguments:
+                                            collected_tool_calls[idx]['function']['arguments'] += tool_call.function.arguments
+                                        if tool_call.id:
+                                            collected_tool_calls[idx]['id'] = tool_call.id
+                                        if tool_call.function and tool_call.function.name:
+                                            collected_tool_calls[idx]['function']['name'] = tool_call.function.name
+
+                                # 记录 finish_reason
+                                if choice.finish_reason:
+                                    finish_reason = choice.finish_reason
+
+                        # 构造完整的 ChatCompletion 对象
+                        # 注意：这里使用 Response 对象的信息来构建
+                        from openai.types.chat.chat_completion import ChatCompletion, Choice
+                        from openai.types.chat.chat_completion_message import ChatCompletionMessage
+                        from openai.types.completion_usage import CompletionUsage
+
+                        message_content = ''.join(collected_messages) if collected_messages else None
+                        tool_calls_list = list(collected_tool_calls.values()) if collected_tool_calls else None
+
+                        # 构造消息对象
+                        message = ChatCompletionMessage(
+                            role='assistant',
+                            content=message_content,
+                            tool_calls=tool_calls_list if tool_calls_list else None
+                        )
+
+                        # 构造 Choice 对象
+                        choice = Choice(
+                            finish_reason=finish_reason or 'stop',
+                            index=0,
+                            message=message
+                        )
+
+                        # 构造 ChatCompletion 对象
+                        # 使用原始 response 中的 id 和 model 信息
+                        completion = ChatCompletion(
+                            id=getattr(response, 'id', 'chatcmpl-streaming'),
+                            choices=[choice],
+                            created=getattr(response, 'created', 0),
+                            model=getattr(response, 'model', 'unknown'),
+                            object='chat.completion',
+                            usage=getattr(response, 'usage', None)
+                        )
+
+                        return completion
+
+                    # 非流式响应，直接返回
+                    return result
 
             model = StreamingOpenAIChatCompletionsModel(
                 model=DEFAULT_MODEL,
