@@ -4,8 +4,9 @@
 功能:
 1. 排除常见的无关目录 (.git, node_modules, __pycache__ 等)
 2. 支持 .gitignore 规则解析
-3. 文件类型分类
-4. 可配置的过滤规则
+3. 支持 wiki ignore 规则解析 (.wiki_ignore, .wikiignore, .wiki-ignore)
+4. 文件类型分类
+5. 可配置的过滤规则
 """
 
 import os
@@ -68,6 +69,7 @@ class FileFilter:
         exclude_dirs: Optional[Set[str]] = None,
         exclude_patterns: Optional[Set[str]] = None,
         gitignore_path: Optional[str | Path] = None,
+        wikiignore_path: Optional[str | Path] = None,
         max_file_size_mb: float = MAX_FILE_SIZE_MB
     ):
         """
@@ -77,6 +79,7 @@ class FileFilter:
             exclude_dirs: 要排除的目录集合 (None 使用默认值)
             exclude_patterns: 要排除的文件模式集合 (None 使用默认值)
             gitignore_path: .gitignore 文件路径 (None 则自动查找)
+            wikiignore_path: .wiki_ignore/.wikiignore/.wiki-ignore 文件路径 (None 则自动查找)
             max_file_size_mb: 最大文件大小限制 (MB)
         """
         self.exclude_dirs = exclude_dirs or self.DEFAULT_EXCLUDE_DIRS.copy()
@@ -87,6 +90,11 @@ class FileFilter:
         self.gitignore_spec = None
         if HAS_PATHSPEC and gitignore_path:
             self._load_gitignore(gitignore_path)
+
+        # 加载 wiki ignore 规则
+        self.wikiignore_spec = None
+        if HAS_PATHSPEC and wikiignore_path:
+            self._load_wikiignore(wikiignore_path)
 
     def _load_gitignore(self, gitignore_path: str | Path):
         """加载 .gitignore 文件"""
@@ -108,6 +116,58 @@ class FileFilter:
         except Exception as e:
             logger.warning(f"Failed to load .gitignore: {e}")
 
+    def _load_wikiignore(self, wikiignore_path: str | Path):
+        """
+        加载 wiki ignore 文件
+        支持 .wiki_ignore, .wikiignore, .wiki-ignore 三种文件名
+        """
+        wikiignore_path = Path(wikiignore_path)
+
+        # 如果传入的是目录，则自动查找支持的文件名
+        if wikiignore_path.is_dir():
+            wikiignore_path = self._find_wikiignore_file(wikiignore_path)
+            if wikiignore_path is None:
+                return
+
+        if not wikiignore_path.exists():
+            logger.debug(f"Wiki ignore file not found: {wikiignore_path}")
+            return
+
+        try:
+            with open(wikiignore_path, 'r', encoding='utf-8') as f:
+                patterns = f.readlines()
+
+            self.wikiignore_spec = pathspec.PathSpec.from_lines(
+                pathspec.patterns.GitWildMatchPattern,
+                patterns
+            )
+            logger.info(f"Loaded wiki ignore rules from {wikiignore_path}")
+        except Exception as e:
+            logger.warning(f"Failed to load wiki ignore file: {e}")
+
+    def _find_wikiignore_file(self, directory: Path) -> Optional[Path]:
+        """
+        在指定目录中查找 wiki ignore 文件
+        按优先级尝试: .wiki_ignore, .wikiignore, .wiki-ignore
+
+        Args:
+            directory: 要查找的目录
+
+        Returns:
+            找到的文件路径，如果都不存在则返回 None
+        """
+        # 按优先级查找
+        possible_names = ['.wiki_ignore', '.wikiignore', '.wiki-ignore']
+
+        for name in possible_names:
+            file_path = directory / name
+            if file_path.exists() and file_path.is_file():
+                logger.debug(f"Found wiki ignore file: {file_path}")
+                return file_path
+
+        logger.debug(f"No wiki ignore file found in {directory}")
+        return None
+
     def should_exclude_dir(self, dir_path: str | Path) -> bool:
         """
         判断目录是否应该被排除
@@ -124,6 +184,14 @@ class FileFilter:
         # 检查是否在排除列表中
         if dir_name in self.exclude_dirs:
             return True
+
+        # 检查 wiki ignore 规则（优先级高于 .gitignore）
+        if self.wikiignore_spec:
+            try:
+                if self.wikiignore_spec.match_file(str(dir_path)):
+                    return True
+            except Exception:
+                pass
 
         # 检查 .gitignore
         if self.gitignore_spec:
@@ -171,6 +239,14 @@ class FileFilter:
         for pattern in self.exclude_patterns:
             if self._match_pattern(file_name, pattern):
                 return True
+
+        # 检查 wiki ignore 规则（优先级高于 .gitignore）
+        if self.wikiignore_spec:
+            try:
+                if self.wikiignore_spec.match_file(str(file_path)):
+                    return True
+            except Exception:
+                pass
 
         # 检查 .gitignore
         if self.gitignore_spec:

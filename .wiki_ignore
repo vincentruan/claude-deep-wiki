@@ -1,0 +1,19 @@
+# Wiki ignore file - test example
+# This file demonstrates the wiki ignore functionality
+
+# Ignore test directories
+tests/
+test_*/
+
+# Ignore documentation that shouldn't be analyzed
+docs/drafts/
+*.draft.md
+
+# Ignore specific output files
+output/
+*.output.json
+
+# Ignore temporary or cache files
+*.tmp
+*.cache
+__temp__/

@@ -55,7 +55,8 @@ def scan_repository_structure(
     repo_path: str,
     max_depth: int = 5,
     include_extensions: Optional[List[str]] = None,
-    exclude_patterns: Optional[List[str]] = None
+    exclude_patterns: Optional[List[str]] = None,
+    use_wikiignore: bool = True
 ) -> Dict[str, Any]:
     """
     扫描代码仓库结构,返回目录树和文件统计
@@ -65,6 +66,7 @@ def scan_repository_structure(
         max_depth: 最大扫描深度 (默认 5)
         include_extensions: 只包含的文件扩展名列表 (如 ['.py', '.js'])
         exclude_patterns: 额外排除的文件模式列表
+        use_wikiignore: 是否使用 wiki ignore 文件 (默认 True)
 
     Returns:
         {
@@ -90,7 +92,8 @@ def scan_repository_structure(
 
         # 创建文件过滤器
         file_filter = FileFilter(
-            exclude_patterns=set(exclude_patterns) if exclude_patterns else None
+            exclude_patterns=set(exclude_patterns) if exclude_patterns else None,
+            wikiignore_path=repo_path if use_wikiignore else None
         )
 
         # 扫描文件
@@ -616,7 +619,7 @@ def conditional_tool(name, description, input_schema):
 
 @conditional_tool(
     name="scan_repository_structure",
-    description="扫描代码仓库结构,返回目录树、文件统计和语言分布信息",
+    description="扫描代码仓库结构,返回目录树、文件统计和语言分布信息。支持.wiki_ignore/.wikiignore/.wiki-ignore文件来自定义忽略规则",
     input_schema={
         "type": "object",
         "properties": {
@@ -638,6 +641,11 @@ def conditional_tool(name, description, input_schema):
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "额外排除的文件模式"
+            },
+            "use_wikiignore": {
+                "type": "boolean",
+                "description": "是否使用wiki ignore文件(.wiki_ignore/.wikiignore/.wiki-ignore),默认true",
+                "default": true
             }
         },
         "required": ["repo_path"]
@@ -649,7 +657,8 @@ async def scan_repo_tool(args: Dict[str, Any]) -> Dict[str, Any]:
         repo_path=args["repo_path"],
         max_depth=args.get("max_depth", 5),
         include_extensions=args.get("include_extensions"),
-        exclude_patterns=args.get("exclude_patterns")
+        exclude_patterns=args.get("exclude_patterns"),
+        use_wikiignore=args.get("use_wikiignore", True)
     )
 
     # 转换为 MCP 格式

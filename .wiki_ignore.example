@@ -1,0 +1,104 @@
+# Wiki Ignore File Example
+# This file demonstrates how to use wiki ignore to customize file scanning
+# Copy this file to .wiki_ignore, .wikiignore, or .wiki-ignore and modify as needed
+
+# ============================================================================
+# Test Files and Directories
+# ============================================================================
+
+# Ignore all test directories
+tests/
+test/
+__tests__/
+
+# Ignore test files by pattern
+*_test.py
+*_test.go
+*.test.js
+*.spec.ts
+test_*.py
+
+# ============================================================================
+# Documentation and Drafts
+# ============================================================================
+
+# Ignore draft documentation
+docs/drafts/
+*.draft.md
+*.wip.md
+
+# Ignore old documentation versions
+docs/archive/
+docs/deprecated/
+
+# ============================================================================
+# Build Artifacts and Output
+# ============================================================================
+
+# Build directories
+build/
+dist/
+out/
+output/
+
+# Compiled files
+*.pyc
+*.pyo
+*.class
+*.o
+*.obj
+
+# Output files
+*.output.json
+*.result.xml
+
+# ============================================================================
+# Temporary and Cache Files
+# ============================================================================
+
+# Temporary directories
+temp/
+tmp/
+__temp__/
+.cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.swp
+*.swo
+
+# ============================================================================
+# Development and IDE
+# ============================================================================
+
+# IDE specific files (if not already covered by default exclusions)
+.vscode/settings.json
+.idea/workspace.xml
+
+# Local configuration
+*.local.json
+*.dev.yaml
+
+# ============================================================================
+# Third-party and Dependencies
+# ============================================================================
+
+# Specific vendor directories (in addition to default exclusions)
+vendor/legacy/
+third_party/
+
+# Generated files
+*_generated.py
+*.generated.ts
+
+# ============================================================================
+# Custom Project-specific Exclusions
+# ============================================================================
+
+# Add your project-specific patterns here
+# Example:
+# internal/experimental/
+# legacy/
+# prototype/

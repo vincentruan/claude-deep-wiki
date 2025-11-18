@@ -198,6 +198,39 @@ export MODEL_MAX_TOKENS="4096"            # 默认: 4096
 | `ENABLE_STREAMING`     | 启用流式响应（某些 API 强制要求）            | `false`        |
 | `OUTPUT_DIR`           | 输出目录路径（相对路径基于被分析仓库）       | `".wiki"`      |
 
+### 自定义忽略规则（可选）
+
+项目支持通过 wiki ignore 文件来自定义扫描时需要忽略的文件或目录。在被分析的代码仓库根目录下创建以下任一文件：
+
+- `.wiki_ignore` （推荐）
+- `.wikiignore`
+- `.wiki-ignore`
+
+**文件格式**与 `.gitignore` 相同，支持所有 gitignore 语法：
+
+```bash
+# 示例 .wiki_ignore 文件
+
+# 忽略测试目录
+tests/
+test_*/
+
+# 忽略特定文件模式
+*.test.js
+*.spec.ts
+
+# 忽略临时文件
+temp/
+*.tmp
+*.cache
+
+# 忽略文档草稿
+docs/drafts/
+*.draft.md
+```
+
+**优先级**：wiki ignore 规则优先级高于默认的排除规则和 `.gitignore` 文件。
+
 ### 运行分析
 
 ```bash
