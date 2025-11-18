@@ -21,7 +21,8 @@ from config import (
     MODEL_TEMPERATURE,
     MODEL_TOP_P,
     MODEL_MAX_TOKENS,
-    MAX_TURNS
+    MAX_TURNS,
+    ENABLE_STREAMING
 )
 
 logger = logging.getLogger(__name__)
@@ -177,9 +178,11 @@ class AgentFactory:
 
         model = OpenAIChatCompletionsModel(
             model=DEFAULT_MODEL,
-            openai_client=openai_client
+            openai_client=openai_client,
+            stream=ENABLE_STREAMING  # 支持流式响应
         )
         logger.info(f"[AgentFactory] Created OpenAIChatCompletionsModel for {DEFAULT_MODEL}")
+        logger.info(f"[AgentFactory] Streaming mode: {'enabled' if ENABLE_STREAMING else 'disabled'}")
 
         # 创建 Agent（使用显式的Model对象而不是字符串）
         agent = Agent(

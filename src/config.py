@@ -95,6 +95,10 @@ MODEL_TEMPERATURE = float(os.environ.get("MODEL_TEMPERATURE", "0.7"))  # 温度�
 MODEL_TOP_P = float(os.environ.get("MODEL_TOP_P", "1.0"))  # Top-p 采样参数
 MODEL_MAX_TOKENS = int(os.environ.get("MODEL_MAX_TOKENS", "4096"))  # 最大生成 token 数
 
+# 是否启用流式响应（某些 API 如腾讯云编码助手强制要求流式）
+# 注意：仅对 OpenAI SDK 生效，Claude SDK 始终使用非流式
+ENABLE_STREAMING = os.environ.get("ENABLE_STREAMING", "false").lower() in ("true", "1", "yes")
+
 
 # ============================================================================
 # 日志配置

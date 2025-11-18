@@ -164,6 +164,12 @@ export OPENAI_MODEL="deepseek-chat"
 export OPENAI_API_KEY="dummy-key"
 export OPENAI_BASE_URL="http://localhost:11434/v1"
 export OPENAI_MODEL="qwen2.5:14b"
+
+# 腾讯云编码助手（强制流式响应）
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="https://webankcoding.copilot.qq.com/v2"
+export OPENAI_MODEL="your-model-name"
+export ENABLE_STREAMING="true"
 ```
 
 #### 使用 Claude Agent SDK
@@ -193,6 +199,7 @@ export MODEL_MAX_TOKENS="4096"            # 默认: 4096
 | `MODEL_TEMPERATURE`    | 模型温度（0.0-2.0）                          | `0.7`          |
 | `MODEL_TOP_P`          | Top-p 采样参数（0.0-1.0）                    | `1.0`          |
 | `MODEL_MAX_TOKENS`     | 最大输出 token 数                            | `4096`         |
+| `ENABLE_STREAMING`     | 启用流式响应（某些 API 强制要求）            | `false`        |
 | `OUTPUT_DIR`           | 输出目录路径（相对路径基于被分析仓库）       | `".wiki"`      |
 
 ### 运行分析
